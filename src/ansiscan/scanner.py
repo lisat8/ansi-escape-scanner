@@ -2,9 +2,9 @@
 
 This does not try to be a full terminal emulator. It only needs to answer
 two questions reliably: where does an escape sequence start and end, and
-what broad kind is it (CSI, OSC, or a bare one-off escape). That is enough
-to strip codes, count them, or hand each one to something that actually
-understands what the parameters mean (e.g. SGR color codes).
+what broad kind is it (CSI, OSC, DCS, APC, PM, or a bare one-off escape).
+That is enough to strip codes, count them, or hand each one to something
+that actually understands what the parameters mean (e.g. SGR color codes).
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ class TokenKind(Enum):
     TEXT = auto()
     CSI = auto()
     OSC = auto()
+    DCS = auto()
+    APC = auto()
+    PM = auto()
     ESCAPE = auto()  # a lone ESC + one byte, e.g. ESC ( B or ESC =
 
 
@@ -43,11 +46,22 @@ _CSI = r"\x1b\[[0-9:;<=>?]*[ -/]*[@-~]"
 # Covers window-title and hyperlink sequences.
 _OSC = r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"
 
-# A bare escape: ESC followed by exactly one byte that isn't [ or ].
-# Covers charset selection, DECSC/DECRC, RIS, and similar single-shot codes.
-_BARE = r"\x1b[^\[\]]"
+# DCS, APC, and PM are the other three ECMA-48 "string" sequences: ESC P,
+# ESC _, and ESC ^ respectively, each running up to the ESC \ string
+# terminator. Unlike OSC, real terminals don't accept BEL as a terminator
+# for these, so only ESC \ closes them. DCS carries device-control data
+# (e.g. Sixel graphics, tmux passthrough); APC and PM are rarely used in
+# practice but are part of the same family and just as easy to bound.
+_DCS = r"\x1bP[^\x1b]*\x1b\\"
+_APC = r"\x1b_[^\x1b]*\x1b\\"
+_PM = r"\x1b\^[^\x1b]*\x1b\\"
 
-_SEQUENCE = re.compile(f"(?:{_CSI}|{_OSC}|{_BARE})")
+# A bare escape: ESC followed by exactly one byte that isn't the start of
+# one of the multi-byte sequences above.
+# Covers charset selection, DECSC/DECRC, RIS, and similar single-shot codes.
+_BARE = r"\x1b[^\[\]P_^]"
+
+_SEQUENCE = re.compile(f"(?:{_CSI}|{_OSC}|{_DCS}|{_APC}|{_PM}|{_BARE})")
 
 
 def iter_tokens(text: str) -> Iterator[Token]:
@@ -66,6 +80,12 @@ def iter_tokens(text: str) -> Iterator[Token]:
             kind = TokenKind.CSI
         elif seq.startswith(ESC + "]"):
             kind = TokenKind.OSC
+        elif seq.startswith(ESC + "P"):
+            kind = TokenKind.DCS
+        elif seq.startswith(ESC + "_"):
+            kind = TokenKind.APC
+        elif seq.startswith(ESC + "^"):
+            kind = TokenKind.PM
         else:
             kind = TokenKind.ESCAPE
         yield Token(kind, seq)

@@ -91,14 +91,16 @@ for token in iter_tokens(read_source("session.log")):
 
 Handled: CSI sequences (`ESC [ ... final-byte`, covering SGR colors,
 cursor movement, erase commands, etc.), OSC sequences (`ESC ] ... BEL` or
-`ESC ] ... ESC \`, covering window titles and terminal hyperlinks), and
-bare two-byte escapes (`ESC` followed by one byte, covering charset
-selection and similar).
+`ESC ] ... ESC \`, covering window titles and terminal hyperlinks), DCS,
+APC, and PM sequences (`ESC P`/`ESC _`/`ESC ^ ... ESC \`, covering things
+like Sixel graphics and tmux passthrough), and bare two-byte escapes
+(`ESC` followed by one byte, covering charset selection and similar).
 
 Parsed, not just located: SGR color and attribute codes (16-color,
 256-color, and truecolor foreground/background, plus the common
 attributes like bold and underline), and cursor movement commands
-(CUU/CUD/CUF/CUB/CNL/CPL, CHA, CUP/HVP).
+(CUU/CUD/CUF/CUB/CNL/CPL, CHA, CUP/HVP). DCS/APC/PM sequences are located
+and bounded but their contents aren't parsed further.
 
-Not yet handled: DCS, APC, and PM sequences, and 8-bit (non-ESC-prefixed)
-C1 control codes. See the roadmap in the commit history.
+Not yet handled: 8-bit (non-ESC-prefixed) C1 control codes. See the
+roadmap in the commit history.
