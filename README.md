@@ -68,6 +68,16 @@ in order, so joining every token's `.text` back together always
 reproduces the original string exactly — including any escape sequence
 that got cut off mid-stream because the capture ended abruptly.
 
+If you'd rather not decode first, `iter_tokens_bytes` and `strip_bytes`
+do the same thing directly on a `bytes` object:
+
+```python
+from ansiscan import strip_bytes
+
+with open("session.log", "rb") as f:
+    print(strip_bytes(f.read()))
+```
+
 Parsing SGR color/attribute codes and cursor movement out of a CSI
 token:
 

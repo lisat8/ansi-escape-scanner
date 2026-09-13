@@ -15,7 +15,7 @@ from .csi import (
     parse_cursor,
     parse_sgr,
 )
-from .scanner import Token, TokenKind, iter_tokens, strip
+from .scanner import Token, TokenKind, iter_tokens, iter_tokens_bytes, strip, strip_bytes
 from .sources import read_source
 
 __all__ = [
@@ -23,6 +23,8 @@ __all__ = [
     "TokenKind",
     "iter_tokens",
     "strip",
+    "iter_tokens_bytes",
+    "strip_bytes",
     "read_source",
     "ParsedCSI",
     "parse_csi",

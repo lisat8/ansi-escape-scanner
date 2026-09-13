@@ -12,9 +12,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Iterator
+from typing import Iterator, Union
 
 ESC = "\x1b"
+ESC_BYTES = b"\x1b"
 
 
 class TokenKind(Enum):
@@ -30,7 +31,7 @@ class TokenKind(Enum):
 @dataclass(frozen=True)
 class Token:
     kind: TokenKind
-    text: str
+    text: Union[str, bytes]
 
     @property
     def is_escape(self) -> bool:
@@ -97,3 +98,72 @@ def iter_tokens(text: str) -> Iterator[Token]:
 def strip(text: str) -> str:
     """Return text with every recognized escape sequence removed."""
     return "".join(tok.text for tok in iter_tokens(text) if tok.kind is TokenKind.TEXT)
+
+
+# ---------------------------------------------------------------------------
+# Bytes API.
+#
+# Same rules as above, applied to raw bytes instead of decoded text. This is
+# for callers that want to scan a captured session without deciding on a text
+# encoding first, e.g. piping stdin straight through instead of routing it
+# through read_source's surrogateescape decode.
+
+_CSI_BYTES = rb"\x1b\[[0-9:;<=>?]*[ -/]*[@-~]"
+_OSC_BYTES = rb"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"
+_DCS_BYTES = rb"\x1bP[^\x1b]*\x1b\\"
+_APC_BYTES = rb"\x1b_[^\x1b]*\x1b\\"
+_PM_BYTES = rb"\x1b\^[^\x1b]*\x1b\\"
+_BARE_BYTES = rb"\x1b[^\[\]P_^]"
+
+_SEQUENCE_BYTES = re.compile(
+    b"(?:"
+    + _CSI_BYTES
+    + b"|"
+    + _OSC_BYTES
+    + b"|"
+    + _DCS_BYTES
+    + b"|"
+    + _APC_BYTES
+    + b"|"
+    + _PM_BYTES
+    + b"|"
+    + _BARE_BYTES
+    + b")"
+)
+
+
+def iter_tokens_bytes(data: bytes) -> Iterator[Token]:
+    """Byte-string equivalent of `iter_tokens`.
+
+    Splits raw bytes into plain-text and escape-sequence tokens without
+    requiring the caller to decode first. Joining every token's `.text`
+    back together reproduces `data` exactly, same guarantee as the str API.
+    """
+    pos = 0
+    for match in _SEQUENCE_BYTES.finditer(data):
+        if match.start() > pos:
+            yield Token(TokenKind.TEXT, data[pos:match.start()])
+        seq = match.group(0)
+        if seq.startswith(ESC_BYTES + b"["):
+            kind = TokenKind.CSI
+        elif seq.startswith(ESC_BYTES + b"]"):
+            kind = TokenKind.OSC
+        elif seq.startswith(ESC_BYTES + b"P"):
+            kind = TokenKind.DCS
+        elif seq.startswith(ESC_BYTES + b"_"):
+            kind = TokenKind.APC
+        elif seq.startswith(ESC_BYTES + b"^"):
+            kind = TokenKind.PM
+        else:
+            kind = TokenKind.ESCAPE
+        yield Token(kind, seq)
+        pos = match.end()
+    if pos < len(data):
+        yield Token(TokenKind.TEXT, data[pos:])
+
+
+def strip_bytes(data: bytes) -> bytes:
+    """Return data with every recognized escape sequence removed."""
+    return b"".join(
+        tok.text for tok in iter_tokens_bytes(data) if tok.kind is TokenKind.TEXT
+    )
