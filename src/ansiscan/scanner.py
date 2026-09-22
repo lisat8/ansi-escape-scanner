@@ -25,7 +25,7 @@ class TokenKind(Enum):
     DCS = auto()
     APC = auto()
     PM = auto()
-    ESCAPE = auto()  # a lone ESC + one byte, e.g. ESC ( B or ESC =
+    ESCAPE = auto()  # ESC with a short, terminator-free tail, e.g. ESC ( B or ESC =
 
 
 @dataclass(frozen=True)
@@ -57,10 +57,15 @@ _DCS = r"\x1bP[^\x1b]*\x1b\\"
 _APC = r"\x1b_[^\x1b]*\x1b\\"
 _PM = r"\x1b\^[^\x1b]*\x1b\\"
 
-# A bare escape: ESC followed by exactly one byte that isn't the start of
-# one of the multi-byte sequences above.
-# Covers charset selection, DECSC/DECRC, RIS, and similar single-shot codes.
-_BARE = r"\x1b[^\[\]P_^]"
+# A bare escape: either ESC + one intermediate byte (0x20-0x2F) + one final
+# byte (0x30-0x7E) -- e.g. ESC ( B / ESC ( 0, the charset-selection codes
+# curses programs and `tput` emit constantly -- or, failing that, ESC plus
+# a single byte that isn't the start of one of the multi-byte sequences
+# above, which covers DECSC/DECRC, RIS, and similar single-shot codes.
+# A charset-selection sequence used to get mis-split here: the old pattern
+# only ever consumed ESC + one byte, so the final byte (the "B" in ESC ( B)
+# leaked out as plain text instead of staying part of the escape.
+_BARE = r"\x1b(?:[ -/][0-~]|[^\x1b\[\]P_^])"
 
 _SEQUENCE = re.compile(f"(?:{_CSI}|{_OSC}|{_DCS}|{_APC}|{_PM}|{_BARE})")
 
@@ -113,7 +118,7 @@ _OSC_BYTES = rb"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"
 _DCS_BYTES = rb"\x1bP[^\x1b]*\x1b\\"
 _APC_BYTES = rb"\x1b_[^\x1b]*\x1b\\"
 _PM_BYTES = rb"\x1b\^[^\x1b]*\x1b\\"
-_BARE_BYTES = rb"\x1b[^\[\]P_^]"
+_BARE_BYTES = rb"\x1b(?:[ -/][0-~]|[^\x1b\[\]P_^])"
 
 _SEQUENCE_BYTES = re.compile(
     b"(?:"

@@ -103,8 +103,9 @@ Handled: CSI sequences (`ESC [ ... final-byte`, covering SGR colors,
 cursor movement, erase commands, etc.), OSC sequences (`ESC ] ... BEL` or
 `ESC ] ... ESC \`, covering window titles and terminal hyperlinks), DCS,
 APC, and PM sequences (`ESC P`/`ESC _`/`ESC ^ ... ESC \`, covering things
-like Sixel graphics and tmux passthrough), and bare two-byte escapes
-(`ESC` followed by one byte, covering charset selection and similar).
+like Sixel graphics and tmux passthrough), and bare escapes: `ESC` followed
+by either one intermediate byte and a final byte (charset selection, e.g.
+`ESC ( B`) or just a single final byte (DECSC/DECRC, RIS, and similar).
 
 Parsed, not just located: SGR color and attribute codes (16-color,
 256-color, and truecolor foreground/background, plus the common
